@@ -1,0 +1,29 @@
+# SageMath function to determine the volume rigidity matrix of a simplicial complex with maximal simplices H (expressed as a list of lists on vertices labelled 0,...,n) and
+# configuration matrix C in dimension d
+
+def volrigmat(H,d,C):
+    n = C.ncols()
+    m = len(H)
+    P = []
+    for i in range(1,d+1):
+        for j in C[i]:
+            P.append(j)
+    Q = PolynomialRing(QQ,'x',d*n)
+    q = Q.gens()
+    Rows = []
+    Rows1 = []
+    for i in range(n):
+        Rows1.append(1)
+    Rows.append(Rows1)
+    for i in range(d):
+        Rowsi = []
+        for j in range(n):
+            Rowsi.append(q[j + i*n])
+        Rows.append(Rowsi)
+    D = matrix(Rows)
+    F = []
+    for h in H:
+        F.append(D.matrix_from_columns(h).det())
+    RigMatVars = jacobian(F,q)
+    RigMat = RigMatVars(P)
+    return(RigMat)
