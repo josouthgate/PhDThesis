@@ -1,0 +1,247 @@
+# a series of functions which set up the necessary objects to exterior shift a d-dimensional simplicial complex on n vertices
+
+# defining an ordering for which the LGRC is the initial set - this is not necessary, but is used to compare shifting with respect to different orders
+
+def LGRordering(d, k, n):
+    # list of all d-tuples of [n]
+    dSubs = []
+    for s in Subsets(n,d):
+        ss = []
+        for i in s:
+            ss.append(i-1)
+        dSubs.append(ss)
+    LGRC = []
+    # define the LGRC ordering
+    init = []
+    for i in range(d):
+        init.append(i)
+    LGRC.append(init)
+    # list higher d-tuples
+    for i in range(d):
+        if i != 0:
+            for j in range(d, n):
+                l = []
+                for m in range(d):
+                    if m != i:
+                        l.append(m)
+                l.append(j)
+                LGRC.append(l)
+    LGRC.sort()
+    # list of all k-tuples of [n]
+    kSubs = []
+    for s in Subsets(n,k):
+        ss = []
+        for i in s:
+            ss.append(i-1)
+        kSubs.append(ss)
+    Ord = []
+    # list the k-skeleton of the LGRC
+    for i in kSubs:
+        for j in LGRC:
+            ijcount = 0
+            for m in i:
+                if m in j:
+                    ijcount = ijcount + 1
+            if ijcount == k:
+                Ord.append(i)
+    # add remaining tuples lexicographically
+    for s in kSubs:
+        s.sort()
+        scount = 0
+        for j in Ord:
+            if s == j:
+                scount = scount + 1
+        if scount == 0:
+            Ord.append(s) # this way of checking fixes a bug where some tuples were added twice
+    return(Ord)
+
+# define compound matrices
+
+def Compound(M, d, k, LGR = True):
+    R = []
+    n = M.ncols()
+    
+    if LGR == True:
+        Ord = LGRordering(d,k,n)
+        for s in Ord:
+            Rs = []
+            for t in Ord:
+                Rs.append(M.matrix_from_rows_and_columns(s,t).det())
+            R.append(Rs)
+        return(matrix(R))
+    
+    else:
+        # lexicographically list k-tuples
+        SS = []
+        for s in Subsets(range(n),k):
+            ss = []
+            for i in s:
+                ss.append(i)
+            SS.append(ss)
+        SS.sort()
+        
+        # take the minors
+        
+        for s in SS:
+            Rs = []
+            for t in SS:
+                Rs.append(M.matrix_from_rows_and_columns(s,t).det())
+            R.append(Rs)
+        return(matrix(R))
+
+# define the matrix of compound matrices, a submatrix of which we will take a greedy row basis of
+
+def ExtShiftMatrix(K, d, k, LGR = True):
+    
+    # vertices and variables
+    
+    V = []
+    for s in K:
+        for i in s:
+            if i not in V:
+                V.append(i)
+    n = len(V)
+    
+    Q = PolynomialRing(QQ, 'x', n^2)
+    q = Q.gens()
+    M = []
+    for i in range(n):
+        Mi = []
+        for j in range(n):
+            Mi.append(q[j + i*n])
+        M.append(Mi)
+    M = matrix(M)
+    
+    if LGR == True:
+        
+        Ord = LGRordering(d,k,n)
+        kSimps = []
+        
+        # define rows
+        
+        S = []
+        for s in K:
+            Subs = Subsets(s,k)
+            for t in Subs:
+                tt = []
+                for i in t:
+                    tt.append(i)
+                if tt not in S:
+                    S.append(tt)
+                    
+        for s in Ord:
+            if s in S:
+                kSimps.append(s)
+                
+        # return the matrix
+        
+        MK = Compound(M, d, k, LGR)
+        L = []
+        for s in kSimps:
+            L.append(Ord.index(s))
+        return(MK.matrix_from_rows(L))
+    
+    else:
+        
+        CompletekSimps = []
+        kSimps = []
+        
+        # define the columns
+        
+        Subs = Subsets(range(n),k)
+        for s in Subs:
+            ss = []
+            for i in s:
+                ss.append(i)
+            CompletekSimps.append(ss)
+        
+        CompletekSimps.sort()
+        
+        # define the rows
+        
+        S = []
+        for s in K:
+            Subs = Subsets(s,k)
+            for t in Subs:
+                tt = []
+                for i in t:
+                    tt.append(i)
+                if tt not in S:
+                    S.append(tt)
+                    
+        for s in CompletekSimps:
+            if s in S:
+                kSimps.append(s)
+        kSimps.sort()
+                
+        # return the matrix
+        
+        MK = Compound(M, d, k, LGR = False)
+        L = []
+        for s in kSimps:
+            L.append(CompletekSimps.index(s))
+        return(MK.matrix_from_rows(L))
+
+# perform the shift
+
+def ExtShift(K, LGR = True):
+    
+    # vertices and dimension
+    
+    V = []
+    k = 0
+    for s in K:
+        for i in s:
+            if i not in V:
+                V.append(i)
+        if len(s) > k:
+            k = len(s)
+    d = k+1
+    n = len(V)
+            
+    # approximate genericity via primes
+    
+    Primes = primes_first_n(n^2)
+    P = []
+    for i in range(n^2):
+        P.append(1/Primes[i])
+            
+    # shift going up in dimension
+    
+    if LGR == True:
+        
+        Complex = []
+        
+        for m in range(1,d):
+            mSimps = []
+            Ord = LGRordering(d, m, n)
+            ESM = ExtShiftMatrix(K, d, m, LGR=True)
+            M = ESM(P)            
+            Pivots = M.pivots() # pivots index the (m-1)-simplices in the shifted complex
+            for i in Pivots:
+                mSimps.append(Ord[i])
+            Complex.append(mSimps)
+        return([Complex, M, Pivots])
+    
+    else:
+        
+        Complex = []
+        
+        for m in range(1,k+1):
+            
+            mSimps = []
+            CompletekSimps = []
+            Subs = Subsets(range(n),m)
+            for s in Subs:
+                ss = []
+                for i in s:
+                    ss.append(i)
+                CompletekSimps.append(ss)
+            
+            ESM = ExtShiftMatrix(K, d, m, LGR = False)
+            M = ESM(P)
+            Pivots = M.pivots()
+            for i in Pivots:
+                mSimps.append(CompletekSimps[i])
+            Complex.append(mSimps)
+        return([Complex, M, Pivots])
